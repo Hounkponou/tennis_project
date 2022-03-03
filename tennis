@@ -1,0 +1,1469 @@
+
+import pandas as pd
+import numpy as np
+import random
+import os
+import glob
+import matplotlib.pyplot as plt
+from pandas import Timestamp
+from datetime import datetime
+from tqdm.notebook import tqdm
+from sklearn import preprocessing
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, plot_confusion_matrix
+from sklearn.decomposition import PCA #PCA
+import seaborn as sns
+from sklearn.cluster import KMeans #clustering methods
+get_ipython().run_line_magic('matplotlib', 'inline')
+from sklearn.metrics import accuracy_score, plot_confusion_matrix
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import classification_report
+
+
+# ## In this part we import our data and then we had treat the missing observations
+
+# In[3]:
+
+
+#Importing Our data
+path=r"C:\Users\haefs\OneDrive\Documents\Tennis Project\data"
+# List of files in complete directory
+file_list = []
+List=[]
+ 
+for path, folders, files in os.walk(path):
+    for file in files:
+        file_list.append(os.path.join(path, file))
+ 
+# Loop to print each filename separately
+for filename in file_list:
+    ii=pd.read_csv(filename)
+    List.append(ii)
+    
+#concat file for the dataframe
+#data=pd.concat(List,ignore_index=True)  
+
+
+# In[4]:
+
+
+file_list
+
+
+# In[5]:
+
+
+#Keeping only the grand slam tourney
+condition=(
+    (data['tourney_name']=='Australian Open')|(data['tourney_name']=='Roland Garros')|
+    (data['tourney_name']=='Wimbledon')|(data['tourney_name']=='US Open'))
+data1=data.loc[condition]#.reset_index()
+
+
+# In[ ]:
+
+
+#Sorting data column
+data=data1[['tourney_id', 'tourney_name', 'surface', 'draw_size', 'tourney_level','tourney_date', 'match_num','round','minutes','score','winner_id','winner_rank', 'winner_rank_points', 'winner_seed', 'winner_entry','winner_name', 'winner_hand', 'winner_ht', 'winner_ioc', 'winner_age','best_of','w_ace', 'w_df', 'w_svpt', 'w_1stIn', 'w_1stWon', 'w_2ndWon','w_SvGms', 'w_bpSaved', 'w_bpFaced','loser_id', 'loser_rank', 'loser_rank_points','loser_seed', 'loser_entry', 'loser_name', 'loser_hand',
+       'loser_ht', 'loser_ioc', 'loser_age','l_ace', 'l_df', 'l_svpt','l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms', 'l_bpSaved', 'l_bpFaced',]]
+
+
+# In[ ]:
+
+
+#Dropping some unusual columns
+DROP=['winner_seed','winner_entry','loser_seed','loser_entry']
+dat=data.drop(columns=DROP)
+
+
+# In[ ]:
+
+
+#Dropping NaN
+dat.isnull().sum()
+dat=dat.dropna()
+
+
+# In[ ]:
+
+
+#Reseting index
+dat=dat.reset_index(drop=True)
+
+
+# In[ ]:
+
+
+#information on the data
+dat.info()
+
+
+# ### Data Preparation
+
+# In[ ]:
+
+
+dat=dat[['tourney_date','tourney_id', 'tourney_name', 'surface', 'draw_size', 'tourney_level',
+        'match_num', 'round', 'minutes', 'score', 'winner_id',
+       'winner_rank', 'winner_rank_points', 'winner_name', 'winner_hand',
+       'winner_ht', 'winner_ioc', 'winner_age', 'best_of', 'w_ace', 'w_df',
+       'w_svpt', 'w_1stIn', 'w_1stWon', 'w_2ndWon', 'w_SvGms', 'w_bpSaved',
+       'w_bpFaced', 'loser_id', 'loser_rank', 'loser_rank_points',
+       'loser_name', 'loser_hand', 'loser_ht', 'loser_ioc', 'loser_age',
+       'l_ace', 'l_df', 'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms',
+       'l_bpSaved', 'l_bpFaced']]
+
+
+# In[ ]:
+
+
+#Convert the tourney_date into string
+dat['tourney_date']=dat['tourney_date'].astype(str)
+
+
+# In[ ]:
+
+
+##convertion in tourney_date in date
+dat['tourney_date'] = dat['tourney_date'].apply(lambda x: datetime.strptime(x, '%Y%m%d'))
+
+
+# In[ ]:
+
+
+# From this point, we work with data from 2000 to end of 2019 only
+#dat = dat.loc[dat['tourney_date'] < Timestamp('2020-01-01 00:00:00')]
+
+
+# In[ ]:
+
+
+#Converting some feature in object
+dat[['draw_size', 'match_num', 'winner_id', 'loser_id']] = dat[['draw_size', 'match_num', 'winner_id', 'loser_id']].astype(object)#, errors='coerce')
+
+
+# In[ ]:
+
+
+# Checking outliers
+dat.describe().transpose()
+
+
+# In[ ]:
+
+
+data=dat[['tourney_name', 'surface', 'draw_size', 'tourney_level', 'round', 'minutes', 'score', 'winner_id',
+       'winner_rank', 'winner_rank_points', 'winner_name', 'winner_hand',
+       'winner_ht', 'winner_ioc', 'winner_age', 'best_of', 'w_ace', 'w_df',
+       'w_svpt', 'w_1stIn', 'w_1stWon', 'w_2ndWon', 'w_SvGms', 'w_bpSaved',
+       'w_bpFaced', 'loser_id', 'loser_rank', 'loser_rank_points',
+       'loser_name', 'loser_hand', 'loser_ht', 'loser_ioc', 'loser_age',
+       'l_ace', 'l_df', 'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms',
+       'l_bpSaved', 'l_bpFaced']]
+
+
+# In[ ]:
+
+
+# More details on the values distribution for each feature
+hist = data.hist(bins=10, figsize=(16, 16))
+
+
+# In[ ]:
+
+
+f1 = plt.figure(figsize=(8,8))
+f1.add_subplot(211)
+ax = sns.distplot(data['winner_age'],hist=True, axlabel='WINNER AGE')
+plt.axvline(x=np.mean(data['winner_age']) ,color="red",label="mean")
+plt.axvline(x=np.median(data['winner_age']) ,color="green",label="median")
+_=plt.legend()
+
+f2 = plt.figure(figsize=(8,8))
+f2.add_subplot(212)
+ax = sns.distplot(data['loser_age'],hist=True, axlabel='LOSER_2 AGE')
+plt.axvline(x=np.mean(data['loser_age']) ,color="red",label="mean")
+plt.axvline(x=np.median(data['loser_age']) ,color="green",label="median")
+_=plt.legend()
+
+
+# We abserve above that the median and average age for both winner and loser is around 27 years old
+
+# In[ ]:
+
+
+f3 = data['tourney_name'].value_counts()
+f3.plot(kind='pie',figsize=(8,5), autopct="%0.2f%%")
+plt.title('TOURNEY NAME')
+plt.show()
+
+
+# We observe on the graphical above the percentage of the differents tourney in our database
+
+# In[ ]:
+
+
+f3 = data['surface'].value_counts()
+plot = f3.plot.pie(y='surface', figsize=(7,7), autopct="%0.2f%%")
+plot.set_title("SURFACE OF TENNIS MATCHS")
+plt.show()
+
+
+# We can see that the **hard surface** is the frequent one in our database followed by **Clay and Grass surface**
+
+# In[ ]:
+
+
+grp = data.groupby(['surface', 'tourney_name']).size().unstack()
+grp.apply(lambda x:x/x.sum(), axis=1).plot(kind='bar', stacked=True, legend=True)
+plt.legend(['Australian Open', 'Roland Garros', 'Wimbledon', 'US Open'], bbox_to_anchor=(1, 1))
+plt.xlabel('SURFACE')
+plt.title('DISTRIBUTION OF SURFACE BY TOURNEY NAME')
+
+
+# We can see above that the Rolland Garros is playing on Clay, Us Open on Grass.The Wimbledon and Australian Open on Hard
+
+# ### Outliers
+
+# The winner ace 113
+# We will check this match in order to determine if it's fake or not
+
+# In[ ]:
+
+
+dat.loc[dat['w_ace']==113][['winner_name','loser_name']]
+#In conclusion it is not a buggy but actually this match is the longest one
+
+
+# ### Data Randomization in order to prevent bias
+# In order to prevent bias in the original dataset regarding the Winner and Loser of the match we build a new dataset.
+# 
+# In this dataset, we shuffle and randomized the player associated features like Winner rank, Winner,Loser rank and ...,that contains an informative relative to the winner and loser.
+
+# In[ ]:
+
+
+# We will create a function here who will Randomly distribute the winner's and loser's data in player 1 and player 2.
+
+def randomize_features(match, player1, player2):
+    """
+    Inputs 
+    --------
+    match : dict :
+    player1 : dict :
+    player2 : dict :
+    
+    Returns 
+    --------
+    new_features : dict : randomly distributed features row
+    """
+    new_features = {'tourney_date': match['tourney_date'], 'tourney_id': match['tourney_id'], 'tourney_name': match['tourney_name'],
+                    'tourney_level': match['tourney_level'], 'surface': match['surface'], 'draw_size': match['draw_size'], 
+                    'match_num': match['match_num'], 'round': match['round'], 'score':match['score'],'minutes':match['minutes'],
+                    'best_of': match['best_of'],
+                    'player1':  player1['name'], 'player2':  player2['name'], 
+                    'player1_id':  player1['id'], 'player2_id':  player2['id'],
+                    'player1_age':  player1['age'], 'player2_age':  player2['age'],
+                    'player1_hand':  player1['hand'], 'player2_hand':  player2['hand'],
+                    'player1_ioc':  player1['ioc'], 'player2_ioc':  player2['ioc'],
+                    'player1_ht':  player1['ht'], 'player2_ht':  player2['ht'],
+                    'player1_rank':  player1['rank'], 'player2_rank':  player2['rank'],
+                    'player1_points':  player1['points'], 'player2_points':  player2['points'],
+                    'player1_ace':  player1['ace'], 'player2_ace':  player2['ace'],
+                    'player1_df':  player1['df'], 'player2_df':  player2['df'],
+                    'player1_svpt':  player1['svpt'], 'player2_svpt':  player2['svpt'],
+                    'player1_1stIn':  player1['1stIn'], 'player2_1stIn':  player2['1stIn'],
+                    'player1_1stWon':  player1['1stWon'], 'player2_1stWon':  player2['1stWon'],
+                    'player1_2ndWon':  player1['2ndWon'], 'player2_2ndWon':  player2['2ndWon'],
+                    'player1_SvGms':  player1['SvGms'], 'player2_SvGms':  player2['SvGms'],
+                    'player1_bpSaved':  player1['bpSaved'], 'player2_bpSaved':  player2['bpSaved'],
+                    'player1_bpFaced':  player1['bpFaced'], 'player2_bpFaced':  player2['bpFaced'],
+                   'outcome': match['outcome']}
+
+    return new_features
+
+
+# In[ ]:
+
+
+# Iteratively shuffle all row of the original  dataset in order to prevent our learning of a bias such as
+#the outcome is always in the Winner column.
+    
+  
+def build_random_dataset(dat):
+    """
+    Inputs
+    --------
+    dat : DataFrame : original dataframe
+    
+    Returns 
+    --------
+    dat_random_player_attribution : DataFrame : randomized dataframe
+    """
+    all_data = []
+    for index, row in tqdm(dat.iterrows(), total=dat.shape[0]):
+        
+        match={'tourney_date': row['tourney_date'], 'tourney_id': row['tourney_id'], 'tourney_name': row['tourney_name'],
+                    'tourney_level': row['tourney_level'], 'surface': row['surface'], 'draw_size': row['draw_size'], 
+            'match_num': row['match_num'], 'round': row['round'], 'score':row['score'],'minutes':row['minutes'],'best_of': row['best_of']}
+
+        winner_stats = {'id': row['winner_id'], 'name': row['winner_name'], 'hand': row['winner_hand'], 'rank': row['winner_rank'], 'points': row['winner_rank_points'], 'ioc': row['winner_ioc'],
+                        'age': row['winner_age'], 'ht': row['winner_ht'], 'ace': row[ 'w_ace'], 'df': row['w_df'], 'svpt': row['w_svpt'],
+                        '1stIn': row['w_1stIn'], '1stWon': row['w_1stWon'], '2ndWon': row['w_2ndWon'], 'SvGms': row['w_SvGms'], 'bpSaved': row['w_bpSaved'],
+                        'bpFaced': row['w_bpFaced']}
+
+        loser_stats = {'id': row['loser_id'], 'name': row['loser_name'], 'hand': row['loser_hand'], 'rank': row['loser_rank'], 'points': row['loser_rank_points'], 'ioc': row['loser_ioc'],
+                        'age': row['loser_age'], 'ht': row['loser_ht'], 'ace': row[ 'l_ace'], 'df': row['l_df'], 'svpt': row['l_svpt'],
+                        '1stIn': row['l_1stIn'], '1stWon': row['l_1stWon'], '2ndWon': row['l_2ndWon'], 'SvGms': row['l_SvGms'], 'bpSaved': row['l_bpSaved'],
+                        'bpFaced': row['l_bpFaced']}
+
+        random_player_attribution = random.randint(0, 1)
+        if random_player_attribution == 0: # winner == player1
+            match['outcome'] = 1
+            new_row = randomize_features(match, winner_stats, loser_stats)
+        else: # winner == player2   
+            match['outcome'] = 0
+            new_row = randomize_features(match, loser_stats, winner_stats)
+
+        all_data.append(new_row)   
+
+    df_random_player_attribution = pd.DataFrame(all_data)
+    
+    return df_random_player_attribution
+
+
+# In[ ]:
+
+
+#The new data after the randomization process
+new_data= build_random_dataset(dat)
+
+
+# ### Embedding the player hand variable
+
+# In[5]:
+
+
+
+#We encode the PLAYER HAND  variable it take 1 if the player HAND is a Right and 0 in the other case
+for i, row in tqdm(new_data.iterrows(), total=new_data.shape[0]):
+    if new_data['player1_hand'][i]=='R':
+        new_data['player1_hand'][i]=1
+    else:
+        new_data['player1_hand'][i]=0
+
+
+# In[ ]:
+
+
+
+#We encode the PLAYER HAND  variable it take 1 if the player HAND is a Right and 0 in the other case
+for i, row in tqdm(new_data.iterrows(), total=new_data.shape[0]):
+    if new_data['player2_hand'][i]=='R':
+        new_data['player2_hand'][i]=1
+    else:
+        new_data['player2_hand'][i]=0
+
+
+# ### Embedding the player IOC variable
+
+# In[ ]:
+
+
+#Embedding the IOC and Hand Variables
+#We encode the IOC variable it take 1 if the player country is a grand slam country and 0 in the other case
+condition=['USA','GBR','USA','FRA']
+for i, row in tqdm(new_data.iterrows(), total=new_data.shape[0]):
+    if new_data['player1_ioc'][i] in condition:
+        new_data['player1_ioc'][i]=1
+    else:
+        new_data['player1_ioc'][i]=0
+
+
+# In[ ]:
+
+
+#Embedding the IOC and Hand Variables
+#We encode the IOC variable it take 1 if the player country is a grand slam country and 0 in the other case
+condition=['USA','GBR','USA','FRA']
+for i, row in tqdm(new_data.iterrows(), total=new_data.shape[0]):
+    if new_data['player2_ioc'][i] in condition:
+        new_data['player2_ioc'][i]=1
+    else:
+        new_data['player2_ioc'][i]=0
+
+
+# In[ ]:
+
+
+new_data.to_csv(r"C:\Users\haefs\OneDrive\Bureau\data\Ndata1.csv")
+
+
+# # Features Engineering
+# In this section we engineer the features that will be used by our model to predict Tennis' matchs outcomes.
+# 
+# Encoding Categorical Features:
+# 
+#    We encode categorical features using a target encoding approaches, using the player past win rate associated to each categorical feature.
+#    The idea behind this target encoding approach is that players have some preferences regarding the type of surface, the tournament played, the round of the tournament, the best_of...
+# 
+# Features Engineering:
+# 
+#    Statistical features from player's gameplay at different window range. Features, like the global past win rate, the last 5/10/20 matchs win rate, or the last 5/10/20 average games won, or again the last 5/10/20 fault gave us information about the global shape of the player, his more recent shape, his degree of fatigue...
+# 
+#    We chose to take the difference between the stats of our 2 players (diff_rank = player_1_rank - player_2_rank), rather than each statistic indicidually. Indeed, such a symmetry allows our model not to rely on some undesired biases that might be present in the data regarding player 1 vs player 2 data distribution. On top of that, when comparing two statistics, their difference is in general a sufficient informative measure.
+
+# In[ ]:
+
+
+df = new_data.copy()#Copy of our data
+#Here we rename the variable round in order to avoid confusion with the round function that we be will used later
+df=df.rename(columns={'round':'_round'})
+
+
+# Here is a description of what it does:
+# 
+# 1/ **Initialise** caches for all the player and their associated stats
+# 
+# 2/ For all matchs in the dataset with respect to their chronological order:
+# - **Get** the stats of the past match's players stats (takes O(1) given caches are dict) and some of the current match statistics that does not leak future information (like players' rank, players' points, betting odds).
+# - **Compute** the engineered features for the current match.
+# - **Update** the relevant players' caches regarding the current match statistics.
+
+# In[ ]:
+
+
+all_players = set(list(df.player1.unique()) + list(df.player2.unique()))#all players list
+
+list_tourney = df.tourney_name.unique()#all tourneys list
+tourney_cache = {player: {tourney_name: [0, 0] for tourney_name in list_tourney} for player in all_players}
+
+
+list_surface = df.surface.unique()#surface list
+surface_cache = {player: {surface: [0, 0] for surface in list_surface} for player in all_players}
+
+
+list_round = df['_round'].unique()#different round_ list
+round_cache = {player: {_round: [0, 0] for _round in list_round} for player in all_players}
+
+
+list_best_of = df.best_of.unique()# best of list
+best_of_cache = {player: {best_of: [0, 0] for best_of in list_best_of} for player in all_players}
+
+
+# The different Statistical features caches
+statistical_win_rate_cache = {player: {'global_win_rate': [0, 0],
+                                       'past_5_win_rate': [np.nan for _ in range(5)], 
+                                       'past_10_win_rate': [np.nan for _ in range(10)], 
+                                       'past_20_win_rate': [np.nan for _ in range(20)]} for player in all_players}
+
+
+
+statistical_avg_stats_cache = {player: {'global_avg_ace_won': [0, 0],
+                                        'past_5_avg_ace_won': [np.nan for _ in range(5)], 
+                                        'past_10_avg_ace_won': [np.nan for _ in range(10)], 
+                                        'past_20_avg_ace_won': [np.nan for _ in range(20)], 
+                                        
+                                        'global_avg_df': [0, 0],
+                                        'past_5_avg_df': [np.nan for _ in range(5)], 
+                                        'past_10_avg_df': [np.nan for _ in range(10)], 
+                                        'past_20_avg_df': [np.nan for _ in range(20)],
+                                        
+                                        'global_avg_svpt': [0, 0],
+                                        'past_5_avg_svpt': [np.nan for _ in range(5)], 
+                                        'past_10_avg_svpt': [np.nan for _ in range(10)], 
+                                        'past_20_avg_svpt': [np.nan for _ in range(20)],
+                                        
+                                        'global_avg_1stIn': [0, 0],
+                                        'past_5_avg_1stIn': [np.nan for _ in range(5)], 
+                                        'past_10_avg_1stIn': [np.nan for _ in range(10)], 
+                                        'past_20_avg_1stIn': [np.nan for _ in range(20)],
+                                        
+                                        'global_avg_1stWon': [0, 0],
+                                        'past_5_avg_1stWon': [np.nan for _ in range(5)], 
+                                        'past_10_avg_1stWon': [np.nan for _ in range(10)], 
+                                        'past_20_avg_1stWon': [np.nan for _ in range(20)],
+                                        
+                                        'global_avg_2ndWon': [0, 0],
+                                        'past_5_avg_2ndWon': [np.nan for _ in range(5)], 
+                                        'past_10_avg_2ndWon': [np.nan for _ in range(10)], 
+                                        'past_20_avg_2ndWon': [np.nan for _ in range(20)],
+                                       
+                                        'global_avg_SvGms': [0, 0],
+                                        'past_5_avg_SvGms': [np.nan for _ in range(5)], 
+                                        'past_10_avg_SvGms': [np.nan for _ in range(10)], 
+                                        'past_20_avg_SvGms': [np.nan for _ in range(20)],
+                                       
+                                        'global_avg_bpSaved': [0, 0],
+                                        'past_5_avg_bpSaved': [np.nan for _ in range(5)], 
+                                        'past_10_avg_bpSaved': [np.nan for _ in range(10)], 
+                                        'past_20_avg_bpSaved': [np.nan for _ in range(20)],
+                                        
+                                        'global_avg_bpFaced': [0, 0],
+                                        'past_5_avg_bpFaced': [np.nan for _ in range(5)], 
+                                        'past_10_avg_bpFaced': [np.nan for _ in range(10)], 
+                                        'past_20_avg_bpFaced': [np.nan for _ in range(20)]} for player in all_players}
+
+
+# In[ ]:
+
+
+def compute_diff(cache, player1, player2, feature, window):
+    """
+    Compute the difference between the statistics
+    
+    Inputs 
+    --------
+    cache : dict : dataset to normalize
+    player1 : str : player's 1 name
+    player2 : str : player's 2 name
+    feature : str : the feature to update
+    window : str : either it is a 'global' (all past matchs are considered) or a 'local' (only a limited 
+                   number of matchs are considered) feature
+    """
+    if (window == 'global'):
+        if (cache[player1][feature][1] > 0) and (cache[player2][feature][1] > 0):
+            stat_1 = round(cache[player1][feature][0] / cache[player1][feature][1], 4)
+            stat_2 = round(cache[player2][feature][0] / cache[player2][feature][1], 4) 
+        else:
+            stat_1 = np.nan
+            stat_2 = np.nan
+            
+    elif (window == 'local'):
+        stat_1 = round(sum(cache[player1][feature]) / len(cache[player1][feature]), 4)
+        stat_2 = round(sum(cache[player2][feature]) / len(cache[player2][feature]), 4)  
+        
+    else:
+        raise Exception("Wrong window mode, must be 'global' or 'local'.")
+        
+    diff = stat_1 - stat_2
+    return diff
+
+
+# In[ ]:
+
+
+def update_win_rate_cache(cache, winning_player, loosing_player, feature, window):
+    """
+    Update the the statistical_win_rate_cache with the current match's outcome.
+    
+    Inputs 
+    --------
+    cache : dict : dictionary that keeps track of the 
+    winning_player : str : winning player's name
+    loosing_player : str : loosing player's name
+    feature : str : the feature to update
+    window : str : either it is a 'global' (all past matchs are considered) or a 'local' (only a limited 
+                   number of matchs are considered) feature
+    """
+    if (window == 'global'):
+        # Add a win and a match to the winning_player counter
+        cache[winning_player][feature][0] += 1
+        cache[winning_player][feature][1] += 1
+        
+        # Add a match to the loosing_player counter
+        cache[loosing_player][feature][1] += 1
+        
+    elif (window == 'local'):
+        # Add a win to the winning player past window, and pop latest match in the past window
+        cache[winning_player][feature].append(1)
+        cache[winning_player][feature].pop(0)
+        
+        # Add a lose to the loosing player past window, and pop latest match in the past window
+        cache[loosing_player][feature].append(0)
+        cache[loosing_player][feature].pop(0)
+
+    else:
+        raise Exception("Wrong window mode, must be 'global' or 'local'.")
+                  
+
+
+# In[ ]:
+
+
+def update_avg_stats_cache(cache, winning_player, loosing_player, winner_stats, looser_stats, feature, window):
+    """
+    Update the the statistical_avg_stats_cache with the current match's stats.
+    
+    Inputs 
+    --------
+    cache : dict : dictionary that keeps track of the 
+    winning_player : str : winning player's name
+    loosing_player : str : loosi6ng player's name
+    winner_stats : float : 
+    looser_stats : float
+    feature : str : the feature to update
+    window : str : either it is a 'global' (all past matchs are considered) or a 'local' (only a limited 
+                   number of matchs are considered) feature
+    """
+    #print(winner_stats, looser_stats)
+    #print(np.isnan(winner_stats))
+    #print(np.isnan(looser_stats))
+    #print((np.isnan(winner_stats)) and (np.isnan(looser_stats)))
+    #print()
+    # Check if the match stats are not NaN
+    if (not np.isnan(winner_stats)) and (not np.isnan(looser_stats)):
+        
+        if (window == 'global'):
+            # Add the winner stats to the sum of the desired statis and a match to the winning_player counter
+            cache[winning_player][feature][0] += winner_stats
+            cache[winning_player][feature][1] += 1
+
+            # Add a match to the loosing_player counter
+            cache[winning_player][feature][0] += looser_stats
+            cache[loosing_player][feature][1] += 1
+
+        elif (window == 'local'):
+            # Add the winner stats to list of past winning stats, and pop latest match stats in the past window
+            cache[winning_player][feature].append(winner_stats)
+            cache[winning_player][feature].pop(0)
+
+            # Add a lose to the loosing player past window, and pop latest match stats in the past window
+            cache[loosing_player][feature].append(looser_stats)
+            cache[loosing_player][feature].pop(0)
+
+        else:
+            raise Exception("Wrong window mode, must be 'global' or 'local'.")
+
+
+# In[ ]:
+
+
+def build_dataset(df):
+    """
+    Incrementaly build the engineered features dataset using cached data for speed efficiency.
+    
+    Inputs 
+    --------
+    df : DataFrame : 
+    
+    Returns 
+    --------
+    dataset : DataFrame : engineered features dataset 
+    """
+    all_data = []
+
+    for index, row in tqdm(df.iterrows(), total=df.shape[0]):
+        player1 = row['player1']
+        player2 = row['player2'] 
+
+        tourney_name = row['tourney_name']
+        surface = row['surface']
+        _round = row['_round']
+        best_of = row['best_of']
+
+        outcome = row['outcome']
+
+        ################################
+        ##### FEATURES ENGINEERING #####
+        ################################ 
+        featured_row = {}
+
+        featured_row['date'] = row['tourney_date']
+        featured_row['player1'] = player1
+        featured_row['player2'] = player2
+
+        # Categorical encoded features
+        featured_row['diff_tourney_win_rate'] = compute_diff(tourney_cache, player1, player2, tourney_name, window='global')
+        featured_row['diff_surface_win_rate'] = compute_diff(surface_cache, player1, player2, surface, window='global')
+        featured_row['diff_round_win_rate'] = compute_diff(round_cache, player1, player2, _round, window='global')
+        featured_row['diff_best_of_win_rate'] = compute_diff(best_of_cache, player1, player2, best_of, window='global')
+
+        # Tennis statistical features
+        featured_row['diff_rank'] = row['player1_rank'] - row['player2_rank']
+        featured_row['diff_Pts'] = row['player1_points'] - row['player2_points']
+
+        featured_row['diff_global_win_rate'] = compute_diff(statistical_win_rate_cache, player1, player2, 'global_win_rate', window='global')
+        featured_row['diff_past_5_win_rate'] = compute_diff(statistical_win_rate_cache, player1, player2, 'past_5_win_rate', window='local')
+        featured_row['diff_past_10_win_rate'] = compute_diff(statistical_win_rate_cache, player1, player2, 'past_10_win_rate', window='local')
+        featured_row['diff_past_20_win_rate'] = compute_diff(statistical_win_rate_cache, player1, player2, 'past_20_win_rate', window='local')
+
+        featured_row['diff_global_avg_ace_won'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_ace_won', window='global')
+        featured_row['diff_past_5_avg_ace_won'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_ace_won', window='local')
+        featured_row['diff_past_10_avg_ace_won'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_ace_won', window='local')
+        featured_row['diff_past_20_avg_ace_won'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_ace_won', window='local')
+
+        featured_row['diff_global_avg_df'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_df', window='global')
+        featured_row['diff_past_5_avg_df'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_df', window='local')
+        featured_row['diff_past_10_avg_df'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_df', window='local')
+        featured_row['diff_past_20_avg_df'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_df', window='local')
+
+        featured_row['diff_global_avg_svpt'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_svpt', window='global')
+        featured_row['diff_past_5_avg_svpt'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_svpt', window='local')
+        featured_row['diff_past_10_avg_svpt'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_svpt', window='local')
+        featured_row['diff_past_20_avg_svpt'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_svpt', window='local')
+
+        featured_row['diff_global_avg_1stIn'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_1stIn', window='global')
+        featured_row['diff_past_5_avg_1stIn'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_1stIn', window='local')
+        featured_row['diff_past_10_avg_1stIn'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_1stIn', window='local')
+        featured_row['diff_past_20_avg_1stIn'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_1stIn', window='local')
+        
+        featured_row['diff_global_avg_1stWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_1stWon', window='global')
+        featured_row['diff_past_5_avg_1stWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_1stWon', window='local')
+        featured_row['diff_past_10_avg_1stWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_1stWon', window='local')
+        featured_row['diff_past_20_avg_1stWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_1stWon', window='local')
+
+        featured_row['diff_global_avg_2ndWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_2ndWon', window='global')
+        featured_row['diff_past_5_avg_2ndWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_2ndWon', window='local')
+        featured_row['diff_past_10_avg_2ndWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_2ndWon', window='local')
+        featured_row['diff_past_20_avg_2ndWon'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_2ndWon', window='local')
+        
+        featured_row['diff_global_avg_SvGms'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_SvGms', window='global')
+        featured_row['diff_past_5_avg_SvGms'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_SvGms', window='local')
+        featured_row['diff_past_10_avg_SvGms'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_SvGms', window='local')
+        featured_row['diff_past_20_avg_SvGms'] = compute_diff(statistical_avg_stats_cache,player1, player2, 'past_20_avg_SvGms', window='local')
+
+        featured_row['diff_global_avg_bpSaved'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_bpSaved', window='global')
+        featured_row['diff_past_5_avg_bpSaved'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_bpSaved', window='local')
+        featured_row['diff_past_10_avg_bpSaved'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_bpSaved', window='local')
+        featured_row['diff_past_20_avg_bpSaved'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_bpSaved', window='local')
+        
+        featured_row['diff_global_avg_bpFaced'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'global_avg_bpFaced', window='global')
+        featured_row['diff_past_5_avg_bpFaced'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_5_avg_bpFaced', window='local')
+        featured_row['diff_past_10_avg_bpFaced'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_10_avg_bpFaced', window='local')
+        featured_row['diff_past_20_avg_bpFaced'] = compute_diff(statistical_avg_stats_cache, player1, player2, 'past_20_avg_bpFaced', window='local')
+
+        # age height ioc hand
+        featured_row['diff_age'] = row['player1_age'] - row['player2_age']
+        featured_row['diff_ht'] = row['player1_ht'] - row['player2_ht']
+        featured_row['diff_ioc']  = row['player1_ioc'] - row['player2_ioc']
+        featured_row['diff_hand']= row['player1_hand'] - row['player2_hand']
+
+
+        # Outcome
+        featured_row['outcome'] = row['outcome']
+
+        # Add all the engineered data 
+        all_data.append(featured_row)
+
+        ########################
+        ##### UPDATE CACHE #####
+        ########################
+        # player 1 won
+        if outcome == 1:
+            winning_player = player1
+            winner_ace = row['player1_ace']
+            winner_df = row['player1_df']
+            winner_svpt = row['player1_svpt']
+            winner_SvGms = row['player1_SvGms']
+            winner_1stIn = row['player1_1stIn']
+            winner_1stWon = row['player1_1stWon']
+            winner_2ndWon = row['player1_2ndWon']
+            winner_bpFaced = row['player1_bpFaced']
+            winner_bpSaved = row['player1_bpSaved']
+
+
+            loosing_player = player2
+            looser_ace = row['player2_ace']
+            looser_df = row['player2_df']
+            looser_svpt = row['player2_svpt']
+            looser_SvGms = row['player2_SvGms']
+            looser_1stIn = row['player2_1stIn']
+            looser_1stWon = row['player2_1stWon']
+            looser_2ndWon = row['player2_2ndWon']
+            looser_bpFaced = row['player2_bpFaced']
+            looser_bpSaved = row['player2_bpSaved']
+
+        # player 2 won 
+        else:
+            winning_player = player2
+            winner_ace = row['player2_ace']
+            winner_df = row['player2_df']
+            winner_svpt = row['player2_svpt']
+            winner_SvGms =row['player2_SvGms']
+            winner_1stIn = row['player2_1stIn']
+            winner_1stWon = row['player2_1stWon']
+            winner_2ndWon = row['player2_2ndWon']
+            winner_bpFaced = row['player2_bpFaced']
+            winner_bpSaved = row['player2_bpSaved']
+                        
+
+            loosing_player = player1
+            looser_ace = row['player1_ace']
+            looser_df = row['player1_df']
+            looser_svpt = row['player1_svpt']
+            looser_SvGms = row['player1_SvGms']
+            looser_1stIn = row['player1_1stIn']
+            looser_1stWon = row['player1_1stWon']
+            looser_2ndWon = row['player1_2ndWon']
+            looser_bpFaced = row['player1_bpFaced']
+            looser_bpSaved = row['player1_bpSaved']
+    
+
+        # Update the caches regarding the outcome of the current match
+        update_win_rate_cache(tourney_cache, winning_player, loosing_player, tourney_name, window='global')
+        update_win_rate_cache(surface_cache, winning_player, loosing_player, surface, window='global')
+        update_win_rate_cache(round_cache, winning_player, loosing_player, _round, window='global')
+        update_win_rate_cache(best_of_cache, winning_player, loosing_player, best_of, window='global')
+
+        update_win_rate_cache(statistical_win_rate_cache, winning_player, loosing_player, 'global_win_rate', window='global')
+        update_win_rate_cache(statistical_win_rate_cache, winning_player, loosing_player, 'past_5_win_rate', window='local')
+        update_win_rate_cache(statistical_win_rate_cache, winning_player, loosing_player, 'past_10_win_rate', window='local')
+        update_win_rate_cache(statistical_win_rate_cache, winning_player, loosing_player, 'past_20_win_rate', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_ace, looser_ace, 'global_avg_ace_won', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_ace, looser_ace, 'past_5_avg_ace_won', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_ace, looser_ace, 'past_10_avg_ace_won', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_ace, looser_ace, 'past_20_avg_ace_won', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_df, looser_df, 'global_avg_df', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_df, looser_df, 'past_5_avg_df', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_df, looser_df, 'past_10_avg_df', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_df, looser_df, 'past_20_avg_df', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_svpt, looser_svpt, 'global_avg_svpt', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_svpt, looser_svpt, 'past_5_avg_svpt', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_svpt, looser_svpt, 'past_10_avg_svpt', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_svpt, looser_svpt, 'past_20_avg_svpt', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stIn, looser_1stIn, 'global_avg_1stIn', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stIn, looser_1stIn, 'past_5_avg_1stIn', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stIn, looser_1stIn, 'past_10_avg_1stIn', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stIn, looser_1stIn, 'past_20_avg_1stIn', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stWon, looser_1stWon, 'global_avg_1stWon', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stWon, looser_1stWon, 'past_5_avg_1stWon', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stWon, looser_1stWon, 'past_10_avg_1stWon', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_1stWon, looser_1stWon, 'past_20_avg_1stWon', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_2ndWon, looser_2ndWon, 'global_avg_2ndWon', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_2ndWon, looser_2ndWon, 'past_5_avg_2ndWon', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_2ndWon, looser_2ndWon, 'past_10_avg_2ndWon', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_2ndWon, looser_2ndWon, 'past_20_avg_2ndWon', window='local')
+
+        
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_SvGms, looser_SvGms, 'global_avg_SvGms', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_SvGms, looser_SvGms, 'past_5_avg_SvGms', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_SvGms, looser_SvGms, 'past_10_avg_SvGms', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_SvGms, looser_SvGms, 'past_20_avg_SvGms', window='local')
+
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpFaced, looser_bpFaced, 'global_avg_bpFaced', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpFaced, looser_bpFaced, 'past_5_avg_bpFaced', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpFaced, looser_bpFaced, 'past_10_avg_bpFaced', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpFaced, looser_bpFaced, 'past_20_avg_bpFaced', window='local')
+        
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpSaved, looser_bpSaved, 'global_avg_bpSaved', window='global')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpSaved, looser_bpSaved, 'past_5_avg_bpSaved', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpSaved, looser_bpSaved, 'past_10_avg_bpSaved', window='local')
+        update_avg_stats_cache(statistical_avg_stats_cache, winning_player, loosing_player, winner_bpSaved, looser_bpSaved, 'past_20_avg_bpSaved', window='local')
+    
+    
+    # Create dataset
+    dataset = pd.DataFrame(all_data)
+    
+    return dataset
+    
+
+
+# In[ ]:
+
+
+dataset = build_dataset(df)
+
+
+# In[ ]:
+
+
+#Final data
+dataset=dataset.dropna()
+
+
+# In[ ]:
+
+
+#Reseting Index
+dataset=dataset.reset_index()
+#Deleting the index columns
+dataset=dataset.drop(['index'],axis=1)
+#Here we remove the IOC  and hand difference between 
+dataset=dataset.drop(['diff_ioc', 'diff_hand'],axis=1)
+
+
+# In[ ]:
+
+
+f3 = dataset['outcome'].value_counts()
+plot = f3.plot.pie(y='Match Oucome', figsize=(5,5), autopct="%0.2f%%")
+plt.title("TENNIS MATCHS OUTCOMES", pad = 30, fontsize=20, color='black',weight = 'bold')
+plt.show()
+
+
+# From the pie chart above, we observe a balance outcome class
+# This mean there are as many winning player_1 as winning player_2.
+# So **Accuracy**  will be used to evaluate our models's performance.
+
+# ### Data Normalization
+# In this part we normalize our data in order to keep our features' values in a comparable range.
+
+# In[ ]:
+
+
+# normalize the data attributes with MinMaxScaler
+scaler = preprocessing.MinMaxScaler()
+#Removing the date, player and outcome before normalization
+dataset1=dataset.loc[:, (~dataset.columns.isin(['date', 'player1', 'player2','outcome']))]
+#Normalization
+normalized_data = scaler.fit_transform(dataset1)
+#Columns name
+columns=dataset1.columns
+normalized_data=pd.DataFrame(normalized_data,columns=columns)
+#Concatenate the outcome on the normalized data
+normalized_data=pd.concat([normalized_data,dataset['outcome']],axis=1)
+
+
+# In[ ]:
+
+
+# Plot size
+fig, ax = plt.subplots(figsize=(30,25))
+
+# correlation between variables 
+
+corr_df = normalized_data.corr()
+df_lt = corr_df.where(np.tril(np.ones(corr_df.shape)).astype(np.bool_))
+heatmap = sns.heatmap(df_lt, annot=True, fmt='.2f',cmap="YlGnBu")
+
+plt.title('CORRELATION MATRIX', fontsize=20)
+#plt.savefig('corr.png')
+plt.show()
+
+
+# ## Modelling Phase
+# 
+# In this section we explore a number of machine learning algorithms in order to predict the outcome of tennis matchs given the previously engineered features.
+# Our models will be trained on data from 1990 to 2017 and validated on 2018 to 2021.
+# 
+#             
+#    **Training/Validation** step:
+# - **Train set**: matchs from 1990-2017
+# - **Validation set**: matchs from 2018 2021
+# 
+# 
+# Given that our outcome class (0 when player 1 looses and 1 when he wins) is balanced, the performance metric that we will consider to evaluate the models' performance will be the **accuracy** of the predictions.
+
+# In[6]:
+
+
+#Train test split function
+def split_datasets(data):
+    """
+    Split the datasets regarding the desired evaluation year (2018 and 2019 in our case).
+    
+    Inputs 
+    --------
+    data : DataFrame : data to split
+    evaluation_year : int : year to consider to perform the model's evaluation
+    
+    Returns 
+    --------
+    train_set : np.ndarray : training dataset
+    y_train : np.ndarray : training labels
+    test_set : np.ndarray : validation dataset
+    y_test : np.ndarray : validation labels
+    """
+    evaluation_start_index = 3818  # index location where starts year 2018 in dataframe
+    evaluation_end_index = 4409   #4210  # index location where ends year 2019 in dataframe
+    
+    #Train
+    train_indices = np.arange(0, evaluation_start_index)
+    train_set = data.drop(['outcome'], axis=1).loc[train_indices]
+    y_train = data['outcome'].loc[train_indices]
+    
+    #Test1
+    test_indices = np.arange(evaluation_start_index, evaluation_end_index)
+    test_set = data.drop(['outcome'], axis=1).loc[test_indices]
+    y_test = data['outcome'].loc[test_indices].values
+    
+    #Test2
+    #test_indices = np.arange(evaluation_start_index, evaluation_end_index)
+    #test_set2 = data.drop(['outcome'], axis=1).loc[4211:,]
+    #y_test2 = data['outcome'].loc[4211:,].values  
+    
+    return train_set, y_train, test_set, y_test
+
+
+# In[7]:
+
+
+#Train Test Split
+X_train, y_train, X_test, y_test = split_datasets(normalized_data)
+
+
+# # Logistic Regression
+
+# ## LOGISTIC REGRESSION
+# In this section, we construct a simple baseline Logistic Regression model.
+
+# In[ ]:
+
+
+LR4=LogisticRegression(max_iter = 10000, penalty ='none')
+LR4.fit(X_train,y_train)
+
+
+# In[ ]:
+
+
+y_pred_LR4=LR4.predict(X_test)
+y_pred_LR_train4=LR4.predict(X_train)
+
+accuracy_train4 = round(accuracy_score(y_train, y_pred_LR_train4), 4)
+print("Training Accuracy:", accuracy_train4)
+
+
+accuracy_test4 = round(accuracy_score(y_test, y_pred_LR4), 4)
+print("Validation Accuracy:", accuracy_test4)
+
+
+# In[ ]:
+
+
+#Confusion matrix
+confusion_matrix5 = confusion_matrix(y_test,y_pred_LR4, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix5).plot()
+
+
+# The result is telling us that we have 153+137 correct predictions and 45+57 incorrect predictions.
+
+# ##  PCA
+# We implement hera a Principal Component Analysis. We will use the components in the next step for a logistic regression based on PCA 
+
+# In[ ]:
+
+
+# Decide the number of PCA components based on the retained information
+pca = PCA()
+pca.fit(X_train)
+explained_variance = np.cumsum(pca.explained_variance_ratio_)
+explained_variance
+#We can see that the cumulative sum of the first 15 components explain 95 % of the variables
+
+
+# In[ ]:
+
+
+#Plot the pca 
+plt.vlines(x=15, ymax=1, ymin=0, colors="r", linestyles="--")
+plt.hlines(y=0.95, xmax=50, xmin=0, colors="g", linestyles="--")
+plt.plot(explained_variance)
+plt.show()
+
+
+# We can see above that to retain 95% explained variance (meaning we retain 95% of the information) we need to use 15 PCA components. So we build the PCA model with 15 components
+
+# In[ ]:
+
+
+pca=PCA(0.95)
+pca.fit(X_train)
+
+
+# In[ ]:
+
+
+X_train_pca = pca.transform(X_train)
+X_test_pca= pca.transform(X_test)
+
+
+# In[ ]:
+
+
+#Now we plot the PCA
+plt.figure(figsize = (10,5))
+sns.scatterplot(data = X_train_pca, s = 60 , palette= 'icefire')
+plt.show()
+
+
+# In[ ]:
+
+
+# Check the correlations between components
+corr_mat = np.corrcoef(X_train_pca.transpose())
+plt.figure(figsize=[8,5])
+sns.heatmap(corr_mat)
+plt.show()
+
+
+# As we can see in the heatmap above, all of the correlations are near zero (black). 
+# This one of the key features of PCA. It means that the transformed features are not correlated to one another.
+# their vectors are orthogonal to each other.
+
+# ## LOGISTIC REGRESSION ON PCA
+# In this section, we construct a Logistic Regression model based on Components obatained by the Principal Component Analysis above
+
+# In[ ]:
+
+
+LR=LogisticRegression(max_iter = 10000, penalty ='none')
+LR.fit(X_train_pca,y_train)
+
+
+# In[ ]:
+
+
+y_pred_LR_pca=LR.predict(X_test_pca)
+y_pred_LR_pca_train=LR.predict(X_train_pca)
+
+accuracy_train = round(accuracy_score(y_train, y_pred_LR_pca_train), 4)
+print("Training Accuracy:", accuracy_train)
+
+
+accuracy_test = round(accuracy_score(y_test, y_pred_LR_pca), 4)
+print("Validation Accuracy:", accuracy_test)
+ 
+
+
+# In[ ]:
+
+
+#Confusion Matrix
+confusion_matrix1 = confusion_matrix(y_test,y_pred_LR_pca, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix1).plot()
+
+
+# ## LOGISTIC REGRESSION WITH LASSO (L1 REGULARIZATION)
+# In this section, we construct a Logistic Regression model based on LASSO regularization
+
+# In[ ]:
+
+
+LR1=LogisticRegression(max_iter = 10000, penalty ='l1',C=10,solver='liblinear')
+LR1.fit(X_train,y_train)
+
+
+# In[ ]:
+
+
+y_pred_LR1=LR1.predict(X_test)
+y_pred_LR_train1=LR1.predict(X_train)
+
+accuracy_train1 = round(accuracy_score(y_train, y_pred_LR_train1), 4)
+print("Training Accuracy:", accuracy_train1)
+
+
+accuracy_test1 = round(accuracy_score(y_test, y_pred_LR1), 4)
+print("Validation Accuracy:", accuracy_test1)
+
+
+# In[ ]:
+
+
+#Confusion Matrix
+confusion_matrix2 = confusion_matrix(y_test,y_pred_LR1, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix2).plot()
+
+
+# ## LOGISTIC REGRESSION WITH RIDGE (ON L2 REGULARIZATION)
+#    In this section, we construct a Logistic Regression model based on RIDGE regularization
+
+# In[ ]:
+
+
+LR2=LogisticRegression(max_iter = 10000, penalty ='l2',C=10,solver='liblinear')
+LR2.fit(X_train,y_train)
+
+
+# In[ ]:
+
+
+y_pred_LR2=LR2.predict(X_test)
+y_pred_LR_train2=LR2.predict(X_train)
+
+
+accuracy_train2 = round(accuracy_score(y_train, y_pred_LR_train2), 4)
+print("Training Accuracy:", accuracy_train2)
+
+
+accuracy_test2 = round(accuracy_score(y_test, y_pred_LR2), 4)
+print("Validation Accuracy:", accuracy_test2)
+
+
+# In[ ]:
+
+
+#Confusion Matrix
+confusion_matrix3 = confusion_matrix(y_test,y_pred_LR2, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix3).plot()
+
+
+# ## LOGISTIC REGRESSION WITH ELASTICNET
+#    In this section, we construct a Logistic Regression model based on both LASSO and RIDGE regularization
+
+# In[ ]:
+
+
+LR3=LogisticRegression(max_iter = 10000, penalty ='elasticnet',C=10,solver='saga',l1_ratio=0.00101)
+LR3.fit(X_train,y_train)
+
+
+# In[ ]:
+
+
+y_pred_LR3=LR3.predict(X_test)
+y_pred_LR_train3=LR3.predict(X_train)
+
+accuracy_train3 = round(accuracy_score(y_train, y_pred_LR_train3), 4)
+print("Training Accuracy:", accuracy_train3)
+
+
+accuracy_test3 = round(accuracy_score(y_test, y_pred_LR3), 4)
+print("Validation Accuracy:", accuracy_test3)
+
+
+# In[ ]:
+
+
+#Confusion matrix
+confusion_matrix4 = confusion_matrix(y_test,y_pred_LR3, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix4).plot()
+
+
+# In this first modelling part, we use a many logistic Regression type. 
+# - First we use a simply logistic regression we get an accuracy of 75% in the prediction of our test data
+# - Secondly we use a logistic Regression based on 15 components from principal component analysis. We get an accuracy of 72% in the prediction of our test data.
+# - Thirstly we use apply a Logistic Regression with a L1 regularization and then we obtain a accuracy of 75%.
+# - For the Ridge Logistic and Elasticnet Logistic, we obtain respectively 75% and 75% of accuuracy.
+
+# ## Random Forest
+# In this section we construct a Random Forest Classifier
+# 
+# A random forest model is a nonparametric supervised learning model. It is a generalization of a random tree
+# model in which several decision trees are trained. A tree is grown by continually “splitting” the data (at each node of the tree) according to a randomly chosen subset of the features. The split is chosen as the best split for those features.
+# 
+# A random forest is made up of many trees (how many is a hyperparameter of the model) trained like this. Given a
+# data point, the output of a random forest is the average of the outputs of each tree for that data point.
+
+# In[ ]:
+
+
+from sklearn.ensemble import RandomForestClassifier
+clf = RandomForestClassifier(max_depth=2, random_state=0)
+clf.fit(X_train,y_train)
+
+y_pred_train=clf.predict(X_train)
+accuracy_train=round(accuracy_score(y_train,y_pred_train),4)
+print('train accurracy',accuracy_train)
+
+y_pred_test=clf.predict(X_test)
+accuracy_test=round(accuracy_score(y_test,y_pred_test),4)
+print('validation accuracy',accuracy_test)
+
+
+# In[8]:
+
+
+#Confusion matrix
+confusion_matrix6 = confusion_matrix(y_test,y_pred_test, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix6).plot()
+plt.show()
+#import seaborn
+#seaborn.heatmap(confusion_matrix6)
+#plt.show()
+
+
+# In this second part of modelling, we had applied Random forest classifier then we obtain almost 72% accuracy.
+
+# ## Support Vector Machine
+# In this section we construct a Random Forest Classifier
+
+# In[ ]:
+
+
+from sklearn.svm import LinearSVC
+
+clf =LinearSVC(random_state=0, tol=1e-5)
+clf.fit(X_train, y_train)
+
+y_pred_train=clf.predict(X_train)
+accuracy_train=round(accuracy_score(y_train,y_pred_train),4)
+print('train accurracy',accuracy_train)
+
+y_pred_test=clf.predict(X_test)
+accuracy_test=round(accuracy_score(y_test,y_pred_test),4)
+print('validation accuracy',accuracy_test)
+
+
+# In[ ]:
+
+
+clf =LinearSVC(penalty='l1',dual=False, tol=1e-5,max_iter=1000)
+clf.fit(X_train, y_train)
+
+y_pred_train=clf.predict(X_train)
+accuracy_train=round(accuracy_score(y_train,y_pred_train),4)
+print('train accurracy',accuracy_train)
+
+y_pred_test=clf.predict(X_test)
+accuracy_test=round(accuracy_score(y_test,y_pred_test),4)
+print('validation accuracy',accuracy_test)
+
+
+# In[ ]:
+
+
+from sklearn.svm import SVC
+
+clf =SVC(kernel='precomputed',random_state=0, tol=1e-5)
+clf.fit(X_train, y_train)
+
+y_pred_train=clf.predict(X_train)
+accuracy_train=round(accuracy_score(y_train,y_pred_train),4)
+print('train accurracy',accuracy_train)
+
+y_pred_test=clf.predict(X_test)
+accuracy_test=round(accuracy_score(y_test,y_pred_test),4)
+print('validation accuracy',accuracy_test)
+
+
+# In[ ]:
+
+
+help(LinearSVC)
+
+
+# In[ ]:
+
+
+#Confusion matrix
+confusion_matrix7 = confusion_matrix(y_test,y_pred_test, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix7).plot()
+
+
+# In this third part of modelling, we had applied Support Vector Machine then we obtain almost 74% pf accuracy.
+
+# ### GradientBoostingClassifier
+
+# In[ ]:
+
+
+from sklearn.datasets import make_hastie_10_2
+from sklearn.ensemble import GradientBoostingClassifier
+
+clf = GradientBoostingClassifier(n_estimators=1000, learning_rate=1.0,
+    max_depth=1, random_state=0)
+clf=clf.fit(X_train, y_train)
+
+
+# In[ ]:
+
+
+
+y_pred_train=clf.predict(X_train)
+accuracy_train=round(accuracy_score(y_train,y_pred_train),4)
+print('train accurracy',accuracy_train)
+
+y_pred_test=clf.predict(X_test)
+accuracy_test=round(accuracy_score(y_test,y_pred_test),4)
+print('validation accuracy',accuracy_test)
+
+
+# In[ ]:
+
+
+#Confusion matrix
+confusion_matrix8 = confusion_matrix(y_test,y_pred_test, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix8).plot()
+
+
+# In[ ]:
+
+
+feature_imp = pd.DataFrame(sorted(zip(clf.feature_importances_, X_train.columns)), columns=['Value','Feature'])
+plt.figure(figsize=(20, 12))
+sns.barplot(x="Value", y="Feature", data=feature_imp.sort_values(by="Value", ascending=False))
+plt.title('Gradient Boosting Features')
+plt.show()
+
+
+#  We observe on the graphical above that the most important features is **diff points** followed by the **surface win rate**, all of this according to the gradient boosting classifier.
+#  - We obtain here a 71% accuracy for the model.
+
+# ## MLPClassifier
+
+# A neural network is composed of “layers.” The input
+# to each layer is either the data itself or the output from a
+# previous layer. Each layer applies a linear transformation to
+# the data and then an activation function, which is typically
+# nonlinear. 
+
+# In[ ]:
+
+
+from sklearn.neural_network import MLPClassifier
+
+clf = MLPClassifier(activation='logistic',solver='adam', alpha=1e-5,hidden_layer_sizes=(5, 2), random_state=1,max_iter=1000)
+
+clf.fit(X_train, y_train)
+
+
+# In[ ]:
+
+
+ypred=clf.predict(X_test)# Prediction of y
+accuracy_test=round(accuracy_score(y_test,ypred),4)
+print("Accuracy:",accuracy_test)#accuracy
+
+
+# In[ ]:
+
+
+#Confusion matrix
+confusion_matrix9 = confusion_matrix(y_test,ypred, normalize='true')
+
+cm_display = ConfusionMatrixDisplay(confusion_matrix9).plot()
+
+
+# Here we applied a MLP classifier. We thought that a neural network might be useful in discovering non-linearities. However, the accuracy of the neural network was 72% who is not as high as the other models.
+
+# ## Best Model
+# Of all the above models, we observe that our best models are the simple logistic regression and the logistic regression with ElasticNet regularization with 75.63% prediction accuracy of the test sample.
+
+# ## Best Model ROC Function
+
+# In[ ]:
+
+
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+logit_roc_auc = roc_auc_score(y_test, LR4.predict(X_test))
+fpr, tpr, thresholds = roc_curve(y_test, LR4.predict_proba(X_test)[:,1])
+plt.figure()
+plt.plot(fpr, tpr, label='Logistic Regression (area = %0.2f)' % logit_roc_auc)
+plt.plot([0, 1], [0, 1],'r--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.savefig('Log_ROC')
+plt.show()
+
+
+# On the the receiver operating characteristic (ROC) curve for our best model, we can see that our classifier stays as far away from the dotted line( who represents the ROC curve of a purely random classifier) as possible . Then we have a good classifier.
+
+# In[ ]:
+
+
+print(classification_report(y_test, LR4.predict(X_test)))
+
+
+#  We can say here that Of the entire test set, 76% of the outcome were the true match outcome. 
+# 
+
+# In[ ]:
+
+
+help
+
